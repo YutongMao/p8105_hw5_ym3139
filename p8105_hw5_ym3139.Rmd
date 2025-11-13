@@ -1,0 +1,36 @@
+---
+title: "p8105_hw5_ym3139"
+author: 'Yutong Mao (UNI: ym3139)'
+date: "2025-11-13"
+output: github_document
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+
+library(tidyverse)  
+```
+
+# Problem 0
+For this assignment, I created a public GitHub repository named `p8105_hw5_ym3139` along with an R project of the same name. All data files required for the assignment are stored in the `data/` subdirectory and accessed via relative paths.
+All code for Problems 1 through 3 is contained within a single R Markdown file, `p8105_hw5_ym3139.Rmd`, which is rendered in `github_document` format.
+
+# Problem 1
+In this study, I employed a simulation approach to investigate the birthday paradox.
+For groups ranging from 2 to 50 individuals, I estimated the probability that at least two members share the same birthday through 10,000 simulation runs.
+
+
+
+
+# Problem 2
+
+
+
+
+# Problem 3
