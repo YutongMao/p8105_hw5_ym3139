@@ -25,7 +25,64 @@ All code for Problems 1 through 3 is contained within a single R Markdown file, 
 In this study, I employed a simulation approach to investigate the birthday paradox.
 For groups ranging from 2 to 50 individuals, I estimated the probability that at least two members share the same birthday through 10,000 simulation runs.
 
+```{r problem1-function}
+# Function to simulate birthdays for a group and check for duplicates
+check_birthday_match <- function(n) {
+  
+  # Simulate n birthdays as integers from 1 to 365
+  birthdays <- sample(1:365, size = n, replace = TRUE)
+  
+  # Check whether there is at least one duplicated birthday
+  any_duplicated <- any(duplicated(birthdays))
+  
+  # Return TRUE if there is a shared birthday, FALSE otherwise
+  any_duplicated
+}
+```
 
+```{r problem1-function-check}
+check_birthday_match(2)    # very small group, low chance of match
+check_birthday_match(50)   # larger group, higher chance of match
+```
+
+```{r problem1-simulation}
+set.seed(1)  # set seed for reproducibility
+
+# Create a data frame of all simulation settings
+bday_sim_results <- 
+  expand_grid(
+    group_size = 2:50,      # number of people in the room
+    iter       = 1:10000    # simulation iteration index
+  ) |>
+  mutate(
+    # For each row, run the birthday function once
+    has_match = map_lgl(group_size, check_birthday_match)
+  ) |>
+  group_by(group_size) |>
+  summarize(
+    # Estimated probability of at least one shared birthday
+    prob_match = mean(has_match)
+  )
+
+# Look at the first few rows of the results
+bday_sim_results
+```
+
+
+```{r problem1-plot}
+# Plot the estimated probability as a function of group size
+bday_sim_results |>
+  ggplot(aes(x = group_size, y = prob_match)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = "Group size (number of people)",
+    y = "Estimated probability of shared birthday",
+    title = "Birthday problem: simulation-based estimates"
+  )
+```
+
+As shown in the chart, the probability of at least two people sharing a birthday increases rapidly as the group size expands. When fewer than 10 people are in the room, this probability approaches 0; when the group size reaches just over 20 people, the probability is approximately 0.5; and when the number of people reaches around 50, the probability approaches 1. This suggests that our intuition about the birthday problem may underestimate how quickly the probability increases with group size.
 
 
 # Problem 2
