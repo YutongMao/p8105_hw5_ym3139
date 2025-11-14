@@ -14,7 +14,8 @@ knitr::opts_chunk$set(
   warning = FALSE
 )
 
-library(tidyverse)  
+library(tidyverse)
+library(broom)      # for tidy t-test output
 ```
 
 # Problem 0
@@ -87,7 +88,137 @@ As shown in the chart, the probability of at least two people sharing a birthday
 
 # Problem 2
 
+In this study, I employed simulation methods to examine the test power of the one-sample t-test under different conditions of true population means. The sample size was fixed at \(n = 30\), and the standard deviation was fixed at \(\sigma = 5\).
 
+```{r problem2-function}
+# Function to simulate one dataset and run a one-sample t-test
+sim_one_ttest <- function(mu, n = 30, sigma = 5) {
+  
+  # Generate n observations from Normal(mu, sigma)
+  x <- rnorm(n, mean = mu, sd = sigma)
+  
+  # Perform one-sample t-test for H0: mu = 0
+  t_out <- t.test(x, mu = 0)
+  
+  # Use broom::tidy to extract estimate and p-value
+  t_tidy <- broom::tidy(t_out)
+  
+  # Return a tibble with the sample mean and p-value
+  tibble(
+    mu_hat  = t_tidy$estimate,   # sample mean
+    p_value = t_tidy$p.value     # p-value for H0: mu = 0
+  )
+}
+```
+
+```{r problem2-function-check}
+sim_one_ttest(mu = 0)
+sim_one_ttest(mu = 3)
+```
+```{r problem2-simulation}
+set.seed(1)  # set seed for reproducibility
+
+# Run 5000 simulations for each true value of mu
+ttest_results <- 
+  expand_grid(
+    true_mu = 0:6,          # true mean values
+    iter    = 1:5000        # simulation iteration index
+  ) |>
+  mutate(
+    # For each row, simulate one dataset and run the t-test
+    sim_df = map(true_mu, sim_one_ttest)
+  ) |>
+  unnest(sim_df) |>
+  mutate(
+    # Indicator for rejecting the null at alpha = 0.05
+    reject_null = p_value < 0.05
+  )
+
+# Take a quick look at the simulated results
+ttest_results |> head()
+
+```
+```{r problem2-power}
+# Compute the power (proportion of rejections) for each true mu
+power_results <- 
+  ttest_results |>
+  group_by(true_mu) |>
+  summarize(
+    power = mean(reject_null)   # proportion of times H0 is rejected
+  )
+
+power_results
+```
+```{r problem2-power-plot}
+# Plot power (proportion of rejections) vs true mu
+power_results |>
+  ggplot(aes(x = true_mu, y = power)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = "True value of mu",
+    y = "Power (proportion of rejections)",
+    title = "Power of one-sample t-test as a function of the true mean"
+  )
+```
+
+The figure shows that the power of the one-sample t-test gradually increases as the true mean moves away from zero. When the true mean is zero, the rejection probability approaches the nominal Type I error rate of 0.05. As the true mean increases from 1 to 6, the test power steadily rises and approaches 1.
+This indicates a positive correlation between effect size and test power: the larger the effect, the easier it is to detect.
+
+As the true mean moves farther from 0 (i.e., the effect size increases), the test's power rises; when μ=0, the rejection rate approaches 0.05, but as μ increases, power rapidly approaches 1.
+
+```{r problem2-mu-estimates}
+# Compute average estimates of mu_hat
+mu_estimates <- 
+  ttest_results |>
+  group_by(true_mu) |>
+  summarize(
+    avg_mu_hat_all    = mean(mu_hat),                # mean over all samples
+    avg_mu_hat_reject = mean(mu_hat[reject_null])    # mean only when H0 is rejected
+  )
+
+mu_estimates
+```
+
+```{r problem2-mu-estimates-long}
+# Reshape to long format for plotting
+mu_estimates_long <- 
+  mu_estimates |>
+  pivot_longer(
+    avg_mu_hat_all:avg_mu_hat_reject,
+    names_to  = "estimate_type",
+    values_to = "avg_estimate"
+  ) |>
+  mutate(
+    # Give more descriptive labels for plotting
+    estimate_type = recode(
+      estimate_type,
+      avg_mu_hat_all    = "All samples",
+      avg_mu_hat_reject = "Samples with rejection"
+    )
+  )
+
+mu_estimates_long
+```
+
+```{r problem2-mu-estimates-plot}
+# Plot average mu_hat vs true mu for all samples and rejected samples
+mu_estimates_long |>
+  ggplot(aes(x = true_mu, y = avg_estimate, color = estimate_type)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = "True value of mu",
+    y = "Average of mu_hat",
+    color = "Estimate type",
+    title = "Average estimates of mu across all samples and rejected samples"
+  )
+```
+
+Across all samples, the average of μ̂ approximates the true value \(\mu\) under each setting, consistent with the property of sample means as unbiased estimators.
+
+However, when averaging μ̂ only from samples that reject the null hypothesis, the resulting mean exceeds the true value \(\mu\). This indicates selection bias: we condition only on events where the observed mean is far from zero and yields a small p-value.
+Therefore, in hypothesis rejection tests, the sample mean of μ̂ does not approximate the true value \(\mu\).
 
 
 # Problem 3
