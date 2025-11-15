@@ -222,3 +222,131 @@ Therefore, in hypothesis rejection tests, the sample mean of μ̂ does not appro
 
 
 # Problem 3
+In this study, I utilized homicide data from 50 major U.S. cities to analyze the proportion of unsolved homicides in each city.
+
+```{r problem3-read}
+# Read in homicide data from the local data/ folder
+homicide_df <- 
+  read_csv("data/homicide-data.csv")
+
+# Take a quick look at the raw data structure
+homicide_df |> 
+  glimpse()
+```
+
+The raw dataset contains one record per homicide case, with variables describing the city, state, year, geographic location, victim demographics, and case disposition (e.g., “closed with arrest,” “unresolved/no arrest”). The data covers over 50,000 homicides across 50 major U.S. cities.
+
+```{r problem3-city-summary}
+# Create city_state and summarize total and unsolved homicides per city
+city_summary <- 
+  homicide_df |>
+  mutate(
+    # Combine city and state into a single variable
+    city_state = str_c(city, ", ", state),
+    # Indicator for unsolved cases
+    unsolved = disposition %in% c("Closed without arrest", "Open/No arrest")
+  ) |>
+  group_by(city_state) |>
+  summarize(
+    total_homicides   = n(),                  # total cases in the city
+    unsolved_homicides = sum(unsolved)        # number of unsolved cases
+  ) |>
+  ungroup()
+
+city_summary |> 
+  head()
+```
+
+For each city, I created a `city_state` variable (e.g., “Baltimore, Maryland”) and aggregated the total number of homicides and unsolved homicides for that city. ‘Unsolved’ includes cases classified as “closed without arrest” or “active/no arrest.”
+
+```{r problem3-baltimore}
+# Filter to Baltimore, MD and extract counts
+baltimore_counts <- 
+  city_summary |>
+  filter(city_state == "Baltimore, MD")
+
+# Run prop.test for the proportion of unsolved homicides
+baltimore_test <- 
+  prop.test(
+    x = baltimore_counts$unsolved_homicides,
+    n = baltimore_counts$total_homicides
+  )
+
+# Tidy the prop.test output
+baltimore_tidy <- 
+  broom::tidy(baltimore_test)
+
+baltimore_tidy
+
+# Pull the estimated proportion and confidence interval
+baltimore_estimate <- baltimore_tidy |> pull(estimate)
+baltimore_ci_low   <- baltimore_tidy |> pull(conf.low)
+baltimore_ci_high  <- baltimore_tidy |> pull(conf.high)
+
+baltimore_estimate
+baltimore_ci_low
+baltimore_ci_high
+```
+
+For Baltimore, MD, the estimated proportion of homicides that are unsolved is
+`r round(baltimore_estimate, 3)`, with a 95% confidence interval from 
+`r round(baltimore_ci_low, 3)` to `r round(baltimore_ci_high, 3)`.
+
+```{r problem3-city-prop}
+# Run prop.test for each city using map2 and list columns
+city_prop_results <- 
+  city_summary |>
+  mutate(
+    # List column with prop.test objects for each city
+    prop_test = map2(
+      unsolved_homicides, 
+      total_homicides,
+      ~ prop.test(x = .x, n = .y)
+    ),
+    # Tidy each prop.test result
+    prop_tidy = map(prop_test, broom::tidy)
+  ) |>
+  # Keep only the city_state and the tidied results
+  select(city_state, prop_tidy) |>
+  unnest(prop_tidy) |>
+  # Rename key columns for clarity
+  rename(
+    prop_unsolved = estimate,
+    ci_low        = conf.low,
+    ci_high       = conf.high
+  )
+
+city_prop_results |> 
+  head()
+
+```
+
+Using a clean pipeline with list-comprehensions and the `map2` function, I applied the `prop.test` function to each city to estimate the proportion of unsolved homicides and its 95% confidence interval.
+
+```{r problem3-plot, fig.height=8}
+# Reorder cities by estimated proportion of unsolved homicides
+city_prop_results_ordered <- 
+  city_prop_results |>
+  mutate(
+    city_state = fct_reorder(city_state, prop_unsolved)
+  )
+
+# Plot estimated proportions and confidence intervals by city
+city_prop_results_ordered |>
+  ggplot(aes(x = city_state, y = prop_unsolved)) +
+  geom_point() +
+  geom_errorbar(
+    aes(ymin = ci_low, ymax = ci_high),
+    width = 0
+  ) +
+  coord_flip() +
+  labs(
+    x = "City",
+    y = "Estimated proportion of unsolved homicides",
+    title = "Proportion of unsolved homicides by city",
+    caption = "95% confidence intervals from prop.test"
+  )
+```
+
+Cities are ranked by their proportion of unsolved homicides. Some cities (such as those in the top region of the chart) exhibit relatively low proportions of unsolved homicides with narrower confidence intervals, indicating more stable clearance rates. Other cities show significantly higher proportions of unsolved homicides, with point estimates exceeding 0.6 and wider confidence intervals.
+
